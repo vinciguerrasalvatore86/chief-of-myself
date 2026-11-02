@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chief of Myself</title>
+<meta name="theme-color" content="#003D5B">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Chief of Myself">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="lock" id="lock" hidden>
+  <form id="lock-form" autocomplete="off">
+    <h2>Chief of Myself</h2>
+    <p>Inserisci la passphrase una volta su questo dispositivo. Resta salvata solo qui.</p>
+    <label>Passphrase
+      <input class="field-in" id="lock-input" type="password" autocomplete="current-password" required>
+    </label>
+    <div class="form-msg err" id="lock-msg" hidden></div>
+    <button class="btn" id="lock-btn" type="submit">Entra</button>
+  </form>
+</div>
+
+<div class="page">
+<div class="cm" id="command-center">
+  <header class="cm-hero" id="hero">
+    <div style="display:grid;gap:6px;position:relative;z-index:1">
+      <h1 class="cm-title">Chief of Myself</h1>
+      <p class="cm-sync" id="sync-line">&nbsp;</p>
+    </div>
+    <div class="cm-hero-actions">
+      <button class="cm-hero-btn cm-add" id="add-task" type="button">+ Nuova task</button>
+      <button class="cm-hero-btn" id="refresh" type="button">Aggiorna</button>
+      <button class="cm-hero-btn cm-claude" id="claude-brief" type="button" title="Copia un riassunto compatto e apre Claude">Briefing con Claude</button>
+      <button class="cm-hero-btn cm-claude" id="claude-weekly" type="button" title="Copia un riassunto compatto e apre Claude">Weekly review con Claude</button>
+      <button class="cm-hero-btn" id="tiles-toggle" type="button" aria-expanded="true">Nascondi i numeri</button>
+      <button class="cm-hero-btn" id="collapse-all" type="button">Comprimi tutte le sezioni</button>
+      <button class="cm-hero-btn" id="expand-all" type="button">Espandi tutte</button>
+    </div>
+    <section class="cm-tiles" id="headline" aria-label="Sintesi">
+      <div class="cm-tile" id="tile-high" style="--acc:var(--b-rasp)"><span class="cm-tile-label">Task High aperte</span><span class="cm-tile-value dash-skeleton" data-field="high_tasks">—</span><span class="cm-tile-note">su <span data-field="open_tasks">—</span> aperte</span></div>
+      <div class="cm-tile" id="tile-week" style="--acc:var(--b-tang)"><span class="cm-tile-label">In scadenza 7 giorni</span><span class="cm-tile-value dash-skeleton" data-field="due_week">—</span><span class="cm-tile-note">ricorrenti incluse</span></div>
+      <div class="cm-tile" id="tile-overdue" style="--acc:var(--b-sun)"><span class="cm-tile-label">Scadute</span><span class="cm-tile-value dash-skeleton" data-field="overdue_tasks">—</span><span class="cm-tile-note">data passata, aperte</span></div>
+      <div class="cm-tile" id="tile-active" style="--acc:var(--b-sea)"><span class="cm-tile-label">Progetti attivi</span><span class="cm-tile-value dash-skeleton" data-field="active_projects">—</span><span class="cm-tile-note"><span data-field="paused_projects">—</span> in hold · <span data-field="live_projects">—</span> live</span></div>
+      <div class="cm-tile" id="tile-stale" style="--acc:var(--b-tang)"><span class="cm-tile-label">Review oltre 14 giorni</span><span class="cm-tile-value dash-skeleton" data-field="stale_projects">—</span><span class="cm-tile-note">progetti attivi</span></div>
+      <div class="cm-tile" id="tile-log" style="--acc:var(--b-jade)"><span class="cm-tile-label">Giorni nel diario</span><span class="cm-tile-value dash-skeleton" data-field="log_days_7">—</span><span class="cm-tile-note">ultimi 7 giorni</span></div>
+    </section>
+  </header>
+
+  <section class="cm-card accent-top" id="agenda" style="--acc:var(--b-sea)">
+    <div class="cm-card-head">
+      <div>
+        <h2 class="cm-h2" style="--acc:var(--b-sea)"><span class="dot"></span>Agenda</h2>
+        <p class="cm-sub">Riunioni del giorno dai due calendari. L'importanza viene dalle regole in Notion: aggiungi una parola chiave del titolo e scegli Alta, Normale, Bassa o Nascondi.</p>
+      </div>
+      <div class="cm-controls">
+        <button class="cm-btn" id="day-prev" type="button" aria-label="Giorno precedente">‹</button>
+        <span class="dy-label" id="day-label">Oggi</span>
+        <button class="cm-btn" id="day-next" type="button" aria-label="Giorno successivo">›</button>
+        <button class="cm-btn" id="day-today" type="button">Oggi</button>
+        <a class="cm-btn dy-rules" id="rules-link" href="https://www.notion.so/dad9272a196a489a87581d" target="_blank" rel="noopener">Regole importanza</a>
+      </div>
+    </div>
+    <div class="dy-allday" id="day-allday"></div>
+    <div class="dy-wrap">
+      <div class="dy-timeline dash-skeleton" id="day-timeline"></div>
+      <aside class="dy-side">
+        <h3 class="cm-h3" style="--acc:var(--b-tang)">Task in scadenza</h3>
+        <ul class="cm-list" id="day-tasks" style="--acc:var(--b-tang)"></ul>
+        <div class="cm-legend-row dy-legend" id="day-legend"></div>
+      </aside>
+    </div>
+  </section>
+
+  <section class="cm-card" id="map">
+    <div class="cm-card-head">
+      <div>
+        <h2 class="cm-h2" style="--acc:var(--b-sea)"><span class="dot"></span>Mappa del portfolio</h2>
+        <p class="cm-sub">Orizzonti in alto, poi programmi e fasi, poi i progetti. Il numero è il conteggio delle task aperte; il bordo rosa segna i progetti da guardare. Tocca un progetto per aprirlo in Notion.</p>
+      </div>
+      <div class="cm-legend-row" id="map-legend"></div>
+    </div>
+    <div class="hz-grid dash-skeleton" id="hierarchy"></div>
+  </section>
+
+  <section class="cm-row" id="work">
+    <div class="cm-card accent-top" id="next-actions" style="--acc:var(--b-tang)">
+      <div class="cm-card-head">
+        <div>
+          <h2 class="cm-h2" style="--acc:var(--b-tang)"><span class="dot"></span>Cosa fare dopo</h2>
+          <p class="cm-sub">Task aperte per priorità, poi per scadenza. Il nome apre la task in Notion.</p>
+        </div>
+        <div class="cm-controls">
+          <select id="f-horizon" aria-label="Orizzonte"></select>
+          <select id="f-priority" aria-label="Priorità">
+            <option value="">Tutte le priorità</option>
+            <option value="High">Solo High</option>
+            <option value="HighMedium">High e Medium</option>
+          </select>
+          <button class="cm-btn" id="f-all" type="button" aria-pressed="false">Mostra tutte</button>
+        </div>
+      </div>
+      <div class="cm-scroll">
+        <table class="cm-table" id="tasks-table">
+          <thead><tr>
+            <th>Task</th><th>Progetto</th><th>Priorità</th><th class="cm-num">Scadenza</th><th class="cm-hide-sm">Stato</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="cm-empty" id="tasks-more"></p>
+    </div>
+    <div class="cm-card accent-top" id="attention-card" style="--acc:var(--b-rasp)">
+      <div>
+        <h2 class="cm-h2" style="--acc:var(--b-rasp)"><span class="dot"></span>Da guardare</h2>
+        <p class="cm-sub">Progetti attivi a rischio, bloccati, con task scadute o senza review recente.</p>
+      </div>
+      <ul class="cm-list" id="attention-list" style="--acc:var(--b-rasp)"></ul>
+    </div>
+  </section>
+
+  <section class="cm-grid" id="signals">
+    <div class="cm-card accent-top" id="load-card" style="--acc:var(--b-blue)">
+      <div>
+        <h2 class="cm-h2" style="--acc:var(--b-blue)"><span class="dot"></span>Carico per orizzonte</h2>
+        <p class="cm-sub">Task aperte per orizzonte, impilate per priorità.</p>
+      </div>
+      <div class="cm-legend-row" id="load-legend"></div>
+      <div class="cm-iso dash-skeleton" id="load-chart"></div>
+    </div>
+    <div class="cm-card accent-top" id="status-card" style="--acc:var(--b-sea)">
+      <div>
+        <h2 class="cm-h2" style="--acc:var(--b-sea)"><span class="dot"></span>Progetti per stato</h2>
+        <p class="cm-sub">Tutti i progetti e le opzioni non chiusi.</p>
+      </div>
+      <div class="cm-donut dash-skeleton" id="status-chart"></div>
+    </div>
+    <div class="cm-card accent-top" id="log-card" style="--acc:var(--b-jade)">
+      <div>
+        <h2 class="cm-h2" style="--acc:var(--b-jade)"><span class="dot"></span>Diario</h2>
+        <p class="cm-sub">Le ultime voci del Work Log. Raccontami la giornata in Claude e la registro qui.</p>
+      </div>
+      <div class="cm-days" id="log-days"></div>
+      <ul class="cm-list" id="log-list" style="--acc:var(--b-jade)"></ul>
+    </div>
+    <div class="cm-card accent-top" id="decisions-card" style="--acc:var(--b-sun)">
+      <div>
+        <h2 class="cm-h2" style="--acc:var(--b-sun)"><span class="dot"></span>Decisioni da rivedere</h2>
+        <p class="cm-sub">Decisioni aperte, la review più vicina in alto.</p>
+      </div>
+      <ul class="cm-list" id="decision-list" style="--acc:var(--b-sun)"></ul>
+    </div>
+    <div class="cm-card accent-top" id="google-card" style="--acc:var(--b-rasp)" hidden>
+      <div>
+        <h2 class="cm-h2" style="--acc:var(--b-rasp)"><span class="dot"></span>Posta e file</h2>
+        <p class="cm-sub">Mail importanti non lette e ultimi file di Drive.</p>
+      </div>
+      <p class="mx-sub" id="mail-title">Gmail</p>
+      <ul class="cm-list" id="mail-list" style="--acc:var(--b-rasp)"></ul>
+      <p class="mx-sub">Drive, modificati di recente</p>
+      <ul class="cm-list" id="drive-list" style="--acc:var(--b-jade)"></ul>
+    </div>
+  </section>
+
+  <section class="cm-card" id="portfolio">
+    <div>
+      <h2 class="cm-h2" style="--acc:var(--b-jade)"><span class="dot"></span>Dove sono</h2>
+      <p class="cm-sub">Progetti per orizzonte. "Giorni da review" conta i giorni dall'ultimo aggiornamento della scheda: oltre 14 è in arancione, vuoto se mai rivista.</p>
+    </div>
+    <div id="portfolio-body"></div>
+  </section>
+</div>
+</div>
+
+<dialog class="task" id="task-dialog">
+  <form id="task-form" method="dialog">
+    <h2>Nuova task</h2>
+    <div class="f-field"><label for="t-title">Cosa c'è da fare</label><input class="field-in" id="t-title" maxlength="300" required></div>
+    <div class="f-field"><span class="lbl">Priorità</span>
+      <div class="seg" id="t-prio">
+        <input type="radio" name="prio" id="pr-h" value="High"><label class="p-High" for="pr-h">High</label>
+        <input type="radio" name="prio" id="pr-m" value="Medium" checked><label class="p-Medium" for="pr-m">Medium</label>
+        <input type="radio" name="prio" id="pr-l" value="Low"><label class="p-Low" for="pr-l">Low</label>
+      </div>
+    </div>
+    <div class="f-field"><span class="lbl">Stato</span>
+      <div class="seg">
+        <input type="radio" name="status" id="st-n" value="Not Started" checked><label class="s" for="st-n">Not Started</label>
+        <input type="radio" name="status" id="st-i" value="In Progress"><label class="s" for="st-i">In Progress</label>
+      </div>
+    </div>
+    <div class="f-row">
+      <div class="f-field"><label for="t-due">Scadenza</label><input class="field-in" id="t-due" type="date"></div>
+      <div class="f-field"><label for="t-rec">Ricorrenza</label>
+        <select class="field-in" id="t-rec"><option value="">Nessuna</option><option>Daily</option><option>Weekly</option><option>Monthly</option><option>Quarterly</option><option>Yearly</option></select>
+      </div>
+    </div>
+    <div class="f-field"><label for="t-proj">Progetto</label><select class="field-in" id="t-proj"><option value="">Nessun progetto</option></select></div>
+    <div class="f-field"><label for="t-notes">Note</label><textarea class="field-in" id="t-notes" maxlength="1900"></textarea></div>
+    <div class="form-msg" id="t-msg" hidden></div>
+    <div class="f-actions">
+      <button class="btn" id="t-save" type="submit">Crea in Notion</button>
+      <button class="btn ghost" id="t-cancel" type="button">Annulla</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script src="config.js"></script>
+<script src="logic.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
