@@ -40,6 +40,9 @@
     </div>
     <div class="cm-hero-actions">
       <button class="cm-hero-btn cm-add" id="add-task" type="button">+ Nuova task</button>
+      <button class="cm-hero-btn cm-add" id="add-event" type="button">+ Evento</button>
+      <button class="cm-hero-btn cm-add" id="add-mail" type="button">+ Email</button>
+      <button class="cm-hero-btn cm-add" id="add-doc" type="button">+ Doc su Drive</button>
       <button class="cm-hero-btn" id="refresh" type="button">Aggiorna</button>
       <button class="cm-hero-btn cm-claude" id="claude-brief" type="button" title="Copia un riassunto compatto e apre Claude">Briefing con Claude</button>
       <button class="cm-hero-btn cm-claude" id="claude-weekly" type="button" title="Copia un riassunto compatto e apre Claude">Weekly review con Claude</button>
@@ -211,6 +214,59 @@
     <div class="f-actions">
       <button class="btn" id="t-save" type="submit">Crea in Notion</button>
       <button class="btn ghost" id="t-cancel" type="button">Annulla</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="task" id="event-dialog">
+  <form id="event-form" method="dialog">
+    <h2>Nuovo evento</h2>
+    <p class="cm-sub">Lo creo nel tuo calendario personale. Non invito nessuno.</p>
+    <div class="f-field"><label for="e-title">Titolo</label><input class="field-in" id="e-title" maxlength="200" required></div>
+    <div class="f-row">
+      <div class="f-field"><label for="e-date">Giorno</label><input class="field-in" id="e-date" type="date" required></div>
+      <div class="f-field"><label for="e-allday">Tutto il giorno</label><select class="field-in" id="e-allday"><option value="">No</option><option value="1">Sì</option></select></div>
+    </div>
+    <div class="f-row" id="e-times">
+      <div class="f-field"><label for="e-start">Inizio</label><input class="field-in" id="e-start" type="time"></div>
+      <div class="f-field"><label for="e-end">Fine</label><input class="field-in" id="e-end" type="time"></div>
+    </div>
+    <div class="f-field"><label for="e-loc">Luogo</label><input class="field-in" id="e-loc" maxlength="200"></div>
+    <div class="f-field"><label for="e-notes">Note</label><textarea class="field-in" id="e-notes" maxlength="2000"></textarea></div>
+    <div class="form-msg" id="e-msg" hidden></div>
+    <div class="f-actions">
+      <button class="btn" id="e-save" type="submit">Crea evento</button>
+      <button class="btn ghost" id="e-cancel" type="button">Annulla</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="task" id="mail-dialog">
+  <form id="mail-form" method="dialog">
+    <h2>Nuova email</h2>
+    <p class="cm-sub">Di solito salvo una bozza in Gmail da rivedere. “Invia ora” spedisce davvero.</p>
+    <div class="f-field"><label for="m-to">A (separa con virgole)</label><input class="field-in" id="m-to" type="text" inputmode="email" autocomplete="off" required></div>
+    <div class="f-field"><label for="m-subj">Oggetto</label><input class="field-in" id="m-subj" maxlength="300" required></div>
+    <div class="f-field"><label for="m-body">Testo</label><textarea class="field-in" id="m-body" rows="7" maxlength="20000"></textarea></div>
+    <div class="form-msg" id="m-msg" hidden></div>
+    <div class="f-actions">
+      <button class="btn" id="m-draft" type="submit">Salva bozza in Gmail</button>
+      <button class="btn ghost" id="m-send" type="button">Invia ora</button>
+      <button class="btn ghost" id="m-cancel" type="button">Annulla</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="task" id="doc-dialog">
+  <form id="doc-form" method="dialog">
+    <h2>Nuovo Doc su Drive</h2>
+    <p class="cm-sub">Crea un nuovo Google Doc di testo. Non modifica né cancella file esistenti.</p>
+    <div class="f-field"><label for="d-name">Titolo</label><input class="field-in" id="d-name" maxlength="200" required></div>
+    <div class="f-field"><label for="d-text">Testo</label><textarea class="field-in" id="d-text" rows="8" maxlength="50000"></textarea></div>
+    <div class="form-msg" id="d-msg" hidden></div>
+    <div class="f-actions">
+      <button class="btn" id="d-save" type="submit">Crea il Doc</button>
+      <button class="btn ghost" id="d-cancel" type="button">Annulla</button>
     </div>
   </form>
 </dialog>

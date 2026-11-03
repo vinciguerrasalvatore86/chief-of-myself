@@ -591,9 +591,81 @@
   });
   $('t-cancel').addEventListener('click', () => $('task-dialog').close());
 
+  /* ---------- Scrivere su Google: evento, email, Doc ---------- */
+  const openDlg = (id) => { const d = $(id); if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', ''); };
+  const showMsg = (id, text, ok) => { const m = $(id); m.className = 'form-msg ' + (ok ? 'ok' : 'err'); m.textContent = text; m.hidden = false; };
+  const needGoogle = () => { if (S.google.state === 'off') { toast('Google non è collegato: vedi il README'); return true; } return false; };
+
+  function openEventDialog() {
+    if (needGoogle()) return;
+    $('event-form').reset(); $('e-msg').hidden = true; $('e-save').disabled = false;
+    const h = new Date().getHours() + 1, t = (n) => pad(Math.min(23, n)) + ':00';
+    $('e-date').value = S.day || todayIso(); $('e-start').value = t(h); $('e-end').value = h >= 23 ? '23:59' : t(h + 1);
+    $('e-times').hidden = false;
+    openDlg('event-dialog'); setTimeout(() => $('e-title').focus(), 30);
+  }
+  $('e-allday').addEventListener('change', () => { $('e-times').hidden = !!$('e-allday').value; });
+  $('event-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const allDay = !!$('e-allday').value, day = $('e-date').value;
+    const body = { title: $('e-title').value.trim(), description: $('e-notes').value.trim(), location: $('e-loc').value.trim() };
+    if (!body.title || !day) return;
+    if (allDay) { body.all_day = true; body.start = day; }
+    else {
+      if (!$('e-start').value || !$('e-end').value) return showMsg('e-msg', 'Inserisci inizio e fine');
+      body.start = day + 'T' + $('e-start').value + ':00'; body.end = day + 'T' + $('e-end').value + ':00';
+    }
+    $('e-save').disabled = true;
+    try {
+      await api('/api/calendar/events', { method: 'POST', body });
+      $('event-dialog').close(); toast('Evento creato nel calendario personale');
+      if (S.day) { delete S.cal[S.day]; loadCalendar(S.day, true); }
+    } catch (e) { showMsg('e-msg', e.message); $('e-save').disabled = false; }
+  });
+  $('e-cancel').addEventListener('click', () => $('event-dialog').close());
+
+  function openMailDialog() {
+    if (needGoogle()) return;
+    $('mail-form').reset(); $('m-msg').hidden = true; $('m-draft').disabled = false; $('m-send').disabled = false;
+    openDlg('mail-dialog'); setTimeout(() => $('m-to').focus(), 30);
+  }
+  async function submitMail(mode) {
+    const to = $('m-to').value.split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean), subject = $('m-subj').value.trim();
+    if (!to.length || !subject) return showMsg('m-msg', 'Servono almeno destinatario e oggetto');
+    if (mode === 'send' && !window.confirm('Invio davvero questa email a ' + to.join(', ') + '?')) return;
+    $('m-draft').disabled = true; $('m-send').disabled = true;
+    try {
+      await api('/api/mail/send', { method: 'POST', body: { mode, confirm: mode === 'send', to, subject, body: $('m-body').value } });
+      $('mail-dialog').close(); toast(mode === 'send' ? 'Email inviata' : 'Bozza salvata in Gmail');
+      if (mode === 'send') loadExtras();
+    } catch (e) { showMsg('m-msg', e.message); $('m-draft').disabled = false; $('m-send').disabled = false; }
+  }
+  $('mail-form').addEventListener('submit', (ev) => { ev.preventDefault(); submitMail('draft'); });
+  $('m-send').addEventListener('click', () => submitMail('send'));
+  $('m-cancel').addEventListener('click', () => $('mail-dialog').close());
+
+  function openDocDialog() {
+    if (needGoogle()) return;
+    $('doc-form').reset(); $('d-msg').hidden = true; $('d-save').disabled = false;
+    openDlg('doc-dialog'); setTimeout(() => $('d-name').focus(), 30);
+  }
+  $('doc-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const name = $('d-name').value.trim(); if (!name) return;
+    $('d-save').disabled = true;
+    try {
+      await api('/api/drive/docs', { method: 'POST', body: { name, content: $('d-text').value } });
+      $('doc-dialog').close(); toast('Doc creato su Drive'); loadExtras();
+    } catch (e) { showMsg('d-msg', e.message); $('d-save').disabled = false; }
+  });
+  $('d-cancel').addEventListener('click', () => $('doc-dialog').close());
+
   /* ---------- Eventi ---------- */
   function bind() {
     $('add-task').addEventListener('click', openTaskDialog);
+    $('add-event').addEventListener('click', openEventDialog);
+    $('add-mail').addEventListener('click', openMailDialog);
+    $('add-doc').addEventListener('click', openDocDialog);
     $('refresh').addEventListener('click', () => refreshAll(true));
     $('claude-brief').addEventListener('click', () => askClaude('brief'));
     $('claude-weekly').addEventListener('click', () => askClaude('weekly'));
