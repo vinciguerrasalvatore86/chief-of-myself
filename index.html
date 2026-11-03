@@ -34,22 +34,47 @@
 <div class="page">
 <div class="cm" id="command-center">
   <header class="cm-hero" id="hero">
-    <div style="display:grid;gap:6px;position:relative;z-index:1">
+    <div class="hd-top">
       <h1 class="cm-title">Chief of Myself</h1>
       <p class="cm-sync" id="sync-line">&nbsp;</p>
     </div>
-    <div class="cm-hero-actions">
-      <button class="cm-hero-btn cm-add" id="add-task" type="button">+ Nuova task</button>
-      <button class="cm-hero-btn cm-add" id="add-event" type="button">+ Evento</button>
-      <button class="cm-hero-btn cm-add" id="add-mail" type="button">+ Email</button>
-      <button class="cm-hero-btn cm-add" id="add-doc" type="button">+ Doc su Drive</button>
-      <button class="cm-hero-btn" id="refresh" type="button">Aggiorna</button>
-      <button class="cm-hero-btn cm-claude" id="claude-brief" type="button" title="Copia un riassunto compatto e apre Claude">Briefing con Claude</button>
-      <button class="cm-hero-btn cm-claude" id="claude-weekly" type="button" title="Copia un riassunto compatto e apre Claude">Weekly review con Claude</button>
-      <button class="cm-hero-btn" id="tiles-toggle" type="button" aria-expanded="true">Nascondi i numeri</button>
-      <button class="cm-hero-btn" id="collapse-all" type="button">Comprimi tutte le sezioni</button>
-      <button class="cm-hero-btn" id="expand-all" type="button">Espandi tutte</button>
+    <div class="hd-bar">
+      <div class="grp" role="group" aria-label="Crea"><span class="gl">Crea</span>
+        <div class="gb">
+          <button class="cm-hero-btn cm-add" id="add-task" type="button">+ Task</button>
+          <button class="cm-hero-btn cm-add" id="add-event" type="button">+ Evento</button>
+          <button class="cm-hero-btn cm-add" id="add-mail" type="button">+ Email</button>
+          <button class="cm-hero-btn cm-add" id="add-doc" type="button">+ Doc su Drive</button>
+        </div>
+      </div>
+      <div class="grp claude" role="group" aria-label="Claude"><span class="gl">Claude</span>
+        <div class="gb">
+          <button class="cm-hero-btn cm-claude" id="claude-brief" type="button" title="Copia un riassunto compatto e apre Claude">Briefing</button>
+          <button class="cm-hero-btn cm-claude" id="claude-weekly" type="button" title="Copia un riassunto compatto e apre Claude">Weekly review</button>
+        </div>
+      </div>
+      <div class="grp" role="group" aria-label="Vista"><span class="gl">Vista</span>
+        <div class="gb">
+          <button class="cm-hero-btn" id="refresh" type="button">Aggiorna</button>
+          <button class="cm-hero-btn" id="tiles-toggle" type="button" aria-expanded="true">Nascondi i numeri</button>
+          <button class="cm-hero-btn" id="toggle-all" type="button">Comprimi tutto</button>
+        </div>
+      </div>
     </div>
+    <nav class="hd-nav" id="hd-nav" aria-label="Vai alla sezione"><span class="gl">Vai a</span>
+      <div class="gb">
+        <a class="nv" href="#agenda" data-go="agenda" style="--c:#25E2CC"><i></i>Agenda</a>
+        <a class="nv" href="#map" data-go="map" style="--c:#25E2CC"><i></i>Mappa</a>
+        <a class="nv" href="#next-actions" data-go="next-actions" style="--c:#FF8400"><i></i>Cosa fare</a>
+        <a class="nv" href="#attention-card" data-go="attention-card" style="--c:#E86A92"><i></i>Da guardare</a>
+        <a class="nv" href="#load-card" data-go="load-card" style="--c:#7FB3C8"><i></i>Carico</a>
+        <a class="nv" href="#status-card" data-go="status-card" style="--c:#25E2CC"><i></i>Stati</a>
+        <a class="nv" href="#log-card" data-go="log-card" style="--c:#2BB3C2"><i></i>Diario</a>
+        <a class="nv" href="#decisions-card" data-go="decisions-card" style="--c:#FBCA18"><i></i>Decisioni</a>
+        <a class="nv" href="#google-card" data-go="google-card" id="nv-google" style="--c:#E86A92" hidden><i></i>Posta e file</a>
+        <a class="nv" href="#portfolio" data-go="portfolio" style="--c:#2BB3C2"><i></i>Dove sono</a>
+      </div>
+    </nav>
     <section class="cm-tiles" id="headline" aria-label="Sintesi">
       <div class="cm-tile" id="tile-high" style="--acc:var(--b-rasp)"><span class="cm-tile-label">Task High aperte</span><span class="cm-tile-value dash-skeleton" data-field="high_tasks">—</span><span class="cm-tile-note">su <span data-field="open_tasks">—</span> aperte</span></div>
       <div class="cm-tile" id="tile-week" style="--acc:var(--b-tang)"><span class="cm-tile-label">In scadenza 7 giorni</span><span class="cm-tile-value dash-skeleton" data-field="due_week">—</span><span class="cm-tile-note">ricorrenti incluse</span></div>

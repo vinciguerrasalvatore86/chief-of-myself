@@ -490,8 +490,8 @@
 
   function drawGoogle() {
     const card = $('google-card'), g = S.google;
-    if (g.state === 'off' || g.state === 'idle') { card.hidden = true; return; }
-    card.hidden = false;
+    if (g.state === 'off' || g.state === 'idle') { card.hidden = true; $('nv-google').hidden = true; return; }
+    card.hidden = false; $('nv-google').hidden = false;
     const ml = $('mail-list'), dl = $('drive-list');
     if (g.state === 'loading') { ml.replaceChildren(el('li', 'cm-empty cm-empty-li', 'Carico…')); dl.replaceChildren(); return; }
     if (g.state === 'error') { failedLine(ml, () => loadExtras()); dl.replaceChildren(); return; }
@@ -516,10 +516,23 @@
       const chev = el('span', 'cm-chev'); chev.setAttribute('aria-hidden', 'true');
       while (h2.firstChild) btn.append(h2.firstChild);
       btn.prepend(chev); h2.append(btn);
-      const set = (open) => { card.classList.toggle('is-collapsed', !open); btn.setAttribute('aria-expanded', String(open)); if (open) requestAnimationFrame(redrawAll); };
+      const set = (open) => { card.classList.toggle('is-collapsed', !open); btn.setAttribute('aria-expanded', String(open)); if (open) requestAnimationFrame(redrawAll); syncToggleAll(); };
       btn.addEventListener('click', () => set(card.classList.contains('is-collapsed')));
+      card._setOpen = set;
       sections.push(set);
     });
+  }
+
+  /* Un solo pulsante: se tutte le sezioni sono aperte le comprime, altrimenti le apre tutte. */
+  const allOpen = () => !document.querySelector('.cm-card.is-collapsed');
+  function syncToggleAll() { const b = $('toggle-all'); if (b) b.textContent = allOpen() ? 'Comprimi tutto' : 'Espandi tutto'; }
+
+  /* Vai a una sezione: la riapre se è compressa, poi ci scorre. */
+  function goTo(id) {
+    const card = $(id); if (!card || card.hidden) return;
+    if (card._setOpen && card.classList.contains('is-collapsed')) card._setOpen(true);
+    const smooth = !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    card.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' });
   }
 
   /* ---------- Redraw ---------- */
@@ -676,8 +689,8 @@
     $('day-prev').addEventListener('click', () => setDay(addDays(S.day, -1)));
     $('day-next').addEventListener('click', () => setDay(addDays(S.day, 1)));
     $('day-today').addEventListener('click', () => setDay(todayIso()));
-    $('collapse-all').addEventListener('click', () => sections.forEach((s) => s(false)));
-    $('expand-all').addEventListener('click', () => sections.forEach((s) => s(true)));
+    $('toggle-all').addEventListener('click', () => { const open = !allOpen(); sections.forEach((s) => s(open)); });
+    document.querySelectorAll('[data-go]').forEach((n) => n.addEventListener('click', (ev) => { ev.preventDefault(); goTo(n.getAttribute('data-go')); }));
     const tb = $('tiles-toggle');
     tb.addEventListener('click', () => { const c = $('hero').classList.toggle('is-collapsed'); tb.setAttribute('aria-expanded', String(!c)); tb.textContent = c ? 'Mostra i numeri' : 'Nascondi i numeri'; });
     if (CFG.RULES_URL) $('rules-link').href = CFG.RULES_URL; else $('rules-link').hidden = true;
@@ -703,6 +716,7 @@
   function init() {
     S.day = todayIso();
     setupSections();
+    syncToggleAll();
     bind();
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
     if (!API || /TUO-SUBDOMINIO/.test(API)) { redrawAll(); showLock('Manca l\'indirizzo del Worker: modifica config.js (vedi guida).'); $('lock-form').querySelectorAll('input,button').forEach((n) => { n.disabled = true; }); return; }
