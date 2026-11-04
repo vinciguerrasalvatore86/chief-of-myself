@@ -519,6 +519,9 @@
       const set = (open) => { card.classList.toggle('is-collapsed', !open); btn.setAttribute('aria-expanded', String(open)); if (open) requestAnimationFrame(redrawAll); syncToggleAll(); };
       btn.addEventListener('click', () => set(card.classList.contains('is-collapsed')));
       card._setOpen = set;
+      const up = el('button', 'cm-top', '↑'); up.type = 'button'; up.title = 'Torna in alto'; up.setAttribute('aria-label', 'Torna in alto');
+      up.addEventListener('click', () => { const smooth = !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); window.scrollTo({ top: 0, behavior: smooth ? 'smooth' : 'auto' }); });
+      card.append(up);
       sections.push(set);
     });
   }
