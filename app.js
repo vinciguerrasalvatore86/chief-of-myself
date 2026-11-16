@@ -594,6 +594,7 @@
     if ($('t-rec').value) body.recurrence = $('t-rec').value;
     if ($('t-proj').value) body.project_id = $('t-proj').value;
     if ($('t-notes').value.trim()) body.notes = $('t-notes').value.trim();
+    if ($('t-links').value.trim()) body.links = $('t-links').value.trim();
     $('t-save').disabled = true;
     try {
       const r = await api('/api/tasks', { method: 'POST', body });
