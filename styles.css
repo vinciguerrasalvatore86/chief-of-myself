@@ -331,3 +331,20 @@ textarea.nt-body { min-height: 16rem; line-height: 1.6; font-size: 14px; }
   .nt-q { width: 100%; }
   textarea.nt-body { min-height: 50vh; }
 }
+
+/* Agenda: meeting cliccabili e task in scadenza */
+button.dy-ev, button.dy-chip { font: inherit; text-align: left; cursor: pointer; }
+button.dy-ev { font-size: 12px; }
+button.dy-chip { font-size: 12px; color: var(--color-fg); }
+button.dy-chip.imp-Alta { color: #fff; }
+button.dy-ev:hover, button.dy-ev:focus-visible, button.dy-chip:hover, button.dy-chip:focus-visible { outline: 2px solid var(--b-sea); outline-offset: 1px; z-index: 3; }
+.dy-chip.dy-task { text-decoration: none; color: var(--color-fg); border: 1px dashed var(--b-sun); background: color-mix(in srgb, var(--b-sun) 12%, transparent); padding-left: 24px; position: relative; }
+.dy-chip.dy-task::before { content: ""; position: absolute; left: 9px; top: 50%; width: 9px; height: 9px; margin-top: -5px; border: 1.5px solid var(--b-sun); border-radius: 2px; }
+.dy-chip.dy-task.hi { font-weight: 600; border-style: solid; }
+.dy-ev.dy-tk { text-decoration: none; border-style: dashed; border-left-style: solid; background: color-mix(in srgb, var(--b-sun) 14%, var(--color-panel)); }
+.dy-ev.dy-tk.hi b::before { content: "★ "; color: #B88A00; }
+.dy-ev.dy-tk:hover, .dy-ev.dy-tk:focus-visible, .dy-chip.dy-task:hover { outline: 2px solid var(--b-sun); outline-offset: 1px; z-index: 3; }
+.dy-legend span.tk::before { background: transparent; border: 1.5px dashed var(--b-sun); }
+.ev-when { margin: 0; font-weight: 600; text-transform: capitalize; }
+#ev-link { text-align: center; text-decoration: none; }
+.dy-timeline > .dy-note + .dy-grid, .dy-timeline > .dy-note:last-of-type { margin-bottom: 14px; }

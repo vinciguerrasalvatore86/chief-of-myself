@@ -259,20 +259,31 @@
     const t0 = todayIso();
     const dObj = new Date(day + 'T12:00:00');
     $('day-label').textContent = (day === t0 ? 'Oggi, ' : '') + dObj.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
-    $('day-legend').replaceChildren(...['Lavoro', 'Personale'].map((k) => { const s = el('span', '', k); s.style.setProperty('--sw', SRC_COLORS[k]); return s; }), el('span', 'star', 'Alta'), (() => { const s = el('span', 'low', 'Bassa'); s.style.setProperty('--sw', BRAND.sea); return s; })());
+    $('day-legend').replaceChildren(...['Lavoro', 'Personale'].map((k) => { const s = el('span', '', k); s.style.setProperty('--sw', SRC_COLORS[k]); return s; }), (() => { const s = el('span', 'tk', 'Task'); s.style.setProperty('--sw', BRAND.sun); return s; })(), el('span', 'star', 'Alta'), (() => { const s = el('span', 'low', 'Bassa'); s.style.setProperty('--sw', BRAND.sea); return s; })());
     drawDayTasks();
+    /* Task con scadenza in questo giorno: senza orario in alto, con orario nella griglia. */
+    const dayTasks = (S.derived && S.derived.nextActions ? S.derived.nextActions : []).filter((t) => t.due === day);
+    const taskChips = dayTasks.filter((t) => !t.due_at).map((t) => {
+      const a = link('', t.task_url); a.className = 'dy-chip dy-task' + (t.priority === 'High' ? ' hi' : '');
+      a.textContent = t.task; a.title = 'Task · ' + (t.priority || 'senza priorità') + (t.project ? ' · ' + shortName(t.project) : '') + ' · apri in Notion';
+      return a;
+    });
     const c = S.cal[day] || { status: 'loading', rows: [] };
     box.classList.toggle('dash-skeleton', c.status === 'loading');
-    if (c.status === 'off') { strip.replaceChildren(); box.replaceChildren(el('p', 'dy-note', 'Google non è ancora collegato: segui la guida (Apps Script) per vedere qui il calendario.')); return; }
-    if (c.status === 'error') { strip.replaceChildren(); failedLine(box, () => loadCalendar(day, true)); box.append(el('p', 'dy-note', c.error || '')); return; }
-    if (c.status !== 'ok') { strip.replaceChildren(); box.replaceChildren(); return; }
+    if (c.status === 'off') { strip.replaceChildren(...taskChips); box.replaceChildren(el('p', 'dy-note', 'Google non è ancora collegato: segui la guida (Apps Script) per vedere qui il calendario.')); return; }
+    if (c.status === 'error') { strip.replaceChildren(...taskChips); failedLine(box, () => loadCalendar(day, true)); box.append(el('p', 'dy-note', c.error || '')); return; }
+    if (c.status !== 'ok') { strip.replaceChildren(...taskChips); box.replaceChildren(); return; }
     const rules = S.notion && Array.isArray(S.notion.meeting_rules) ? S.notion.meeting_rules : [];
     const events = L.computeDayEvents(c.rows, rules);
     const dayStart = new Date(day + 'T00:00:00'), dayEnd = new Date(addDays(day, 1) + 'T00:00:00');
     const shown = events.filter((e) => e.importance !== 'Nascondi');
     const hidden = events.length - shown.length;
-    strip.replaceChildren(...shown.filter((e) => e.all_day).map((e) => { const ch = el('span', 'dy-chip imp-' + e.importance, e.title); ch.style.setProperty('--sc', SRC_COLORS[e.source] || BRAND.sea); ch.title = e.title + (e.rule ? ' · regola: ' + e.rule : '') + ' · ' + e.source; return ch; }));
-    const timed = shown.filter((e) => !e.all_day && e.start).map((e) => {
+    strip.replaceChildren(...shown.filter((e) => e.all_day).map((e) => { const ch = el('button', 'dy-chip imp-' + e.importance, e.title); ch.type = 'button'; ch.style.setProperty('--sc', SRC_COLORS[e.source] || BRAND.sea); ch.title = e.title + (e.rule ? ' · regola: ' + e.rule : '') + ' · ' + e.source; ch.addEventListener('click', () => openEventCard(e)); return ch; }), ...taskChips);
+    const timedTasks = dayTasks.filter((t) => t.due_at).map((t) => {
+      const s = new Date(t.due_at);
+      return { isTask: true, task: t, title: t.task, start: t.due_at, end: new Date(s.getTime() + 30 * 60000).toISOString(), importance: t.priority === 'High' ? 'Alta' : 'Normale', source: 'Task' };
+    });
+    const timed = shown.concat(timedTasks).filter((e) => !e.all_day && e.start).map((e) => {
       const s = new Date(e.start), en = e.end ? new Date(e.end) : new Date(new Date(e.start).getTime() + 30 * 60000);
       const s2 = s < dayStart ? dayStart : s, e2 = en > dayEnd ? dayEnd : en;
       return Object.assign({}, e, { s: s2, e: e2, sm: (s2 - dayStart) / 60000, em: Math.max((e2 - dayStart) / 60000, (s2 - dayStart) / 60000 + 20) });
@@ -296,14 +307,20 @@
     });
     const fmt = (d) => pad(d.getHours()) + ':' + pad(d.getMinutes());
     timed.forEach((e) => {
-      const b = el('div', 'dy-ev imp-' + e.importance);
-      b.style.setProperty('--sc', SRC_COLORS[e.source] || BRAND.sea);
+      let b;
+      if (e.isTask) {
+        b = link('', e.task.task_url); b.className = 'dy-ev dy-tk' + (e.task.priority === 'High' ? ' hi' : '');
+      } else {
+        b = el('button', 'dy-ev imp-' + e.importance); b.type = 'button';
+        b.addEventListener('click', () => openEventCard(e));
+      }
+      b.style.setProperty('--sc', e.isTask ? BRAND.sun : (SRC_COLORS[e.source] || BRAND.sea));
       b.style.top = ((e.sm / 60 - minH) * hourPx + 1) + 'px';
       b.style.height = Math.max(22, (e.em - e.sm) / 60 * hourPx - 2) + 'px';
       const w = 100 / e.lanes;
       b.style.left = 'calc(' + (e.lane * w) + '% + 6px)'; b.style.width = 'calc(' + w + '% - 8px)';
-      b.title = e.title + ' · ' + fmt(e.s) + '–' + fmt(e.e) + ' · ' + e.source + ' · importanza ' + e.importance + (e.rule ? ' (regola: ' + e.rule + ')' : '');
-      b.append(el('b', '', e.title), el('span', '', fmt(e.s) + '–' + fmt(e.e)));
+      b.title = e.isTask ? 'Task alle ' + fmt(e.s) + ' · ' + (e.task.priority || 'senza priorità') + ' · apri in Notion' : e.title + ' · ' + fmt(e.s) + '–' + fmt(e.e) + ' · ' + e.source + ' · importanza ' + e.importance + (e.rule ? ' (regola: ' + e.rule + ')' : '') + ' · clic per la task collegata';
+      b.append(el('b', '', e.title), el('span', '', e.isTask ? fmt(e.s) + ' · task' : fmt(e.s) + '–' + fmt(e.e)));
       grid.append(b);
     });
     if (day === t0) {
@@ -312,6 +329,7 @@
     }
     const notes = [];
     if (!timed.length) notes.push(el('p', 'dy-note', 'Nessuna riunione con orario in questo giorno.'));
+    else if (shown.some((e) => !e.all_day)) notes.push(el('p', 'dy-note', 'Clicca un meeting per aprire la sua task in Notion.'));
     if (hidden) notes.push(el('p', 'dy-note', hidden + (hidden === 1 ? ' evento nascosto' : ' eventi nascosti') + ' dalle regole.'));
     (c.warnings || []).forEach((w) => notes.push(el('p', 'dy-note', w)));
     box.replaceChildren(...notes, grid);
@@ -1181,6 +1199,48 @@
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { persistNotes(); flushAll(); } });
     setInterval(() => { if (Object.keys(NT.pending).length && getPass()) flushAll(); }, 60000);
   }
+
+  /* ---------- Meeting → task collegata ---------- */
+  let cardEvent = null;
+  const evKey = (e) => (e.event_id || '') + '|' + String(e.start || '').slice(0, 10);
+  const evLinks = () => jget('cm_evtask', {});
+  function evWhen(e) {
+    const d = new Date(String(e.start).slice(0, 10) + 'T12:00:00');
+    const day = d.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' });
+    if (e.all_day) return day + ', tutto il giorno';
+    const t = (x) => new Date(x).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: L.TZ });
+    return day + ', ' + t(e.start) + (e.end ? '–' + t(e.end) : '');
+  }
+  function openEventCard(e) {
+    cardEvent = e;
+    $('ev-title').textContent = e.title;
+    $('ev-when').textContent = evWhen(e);
+    $('ev-meta').textContent = ['Calendario ' + e.source, 'importanza ' + e.importance + (e.rule ? ' (regola: ' + e.rule + ')' : '')].join(' · ');
+    const known = evLinks()[evKey(e)];
+    $('ev-open').textContent = known ? 'Apri la task collegata' : 'Apri task';
+    $('ev-open').disabled = !e.event_id;
+    $('ev-hint').textContent = !e.event_id ? 'Questo evento non ha un identificativo: aggiorna lo script Google.' : known ? 'La task esiste già: la apro in Notion.' : 'Se non c\'è ancora, la creo in Notion (scadenza il giorno del meeting) e la apro.';
+    $('ev-msg').hidden = true; $('ev-link').hidden = true;
+    openDlg('event-card');
+  }
+  $('ev-open').addEventListener('click', async () => {
+    const e = cardEvent; if (!e || !e.event_id) return;
+    /* Apro subito la scheda (i browser bloccano le finestre aperte dopo un'attesa), poi ci carico la task. */
+    let w = null; try { w = window.open('about:blank', '_blank'); } catch (x) { w = null; }
+    $('ev-open').disabled = true; $('ev-open').textContent = 'Un attimo…';
+    try {
+      const r = await api('/api/tasks/from-event', { method: 'POST', body: { event_id: e.event_id, day: String(e.start).slice(0, 10), title: e.title, when: evWhen(e), source: e.source } });
+      const m = evLinks(); m[evKey(e)] = r.url; store.set('cm_evtask', JSON.stringify(m));
+      if (w && !w.closed) { w.location.href = r.url; $('event-card').close(); }
+      else { const a = $('ev-link'); a.href = safeUrl(r.url); a.hidden = false; }
+      toast(r.existed ? 'Task collegata aperta' : 'Task creata in Notion');
+      if (!r.existed) loadNotion(true).then(redrawAll);
+    } catch (err) {
+      if (w && !w.closed) w.close();
+      showMsg('ev-msg', err.message);
+    } finally { $('ev-open').disabled = false; $('ev-open').textContent = evLinks()[evKey(e)] ? 'Apri la task collegata' : 'Apri task'; }
+  });
+  $('ev-close').addEventListener('click', () => $('event-card').close());
 
   /* ---------- Eventi ---------- */
   function bind() {

@@ -51,7 +51,7 @@
       const p = (t.project_ids || []).map((i) => byId.get(i)).filter(Boolean)[0];
       const due = t.due ? String(t.due).slice(0, 10) : null;
       return {
-        task_url: t.task_url, task: t.task, priority: t.priority, status: t.status, due, recurrence: t.recurrence,
+        task_url: t.task_url, task: t.task, priority: t.priority, status: t.status, due, due_at: t.due_at || null, recurrence: t.recurrence,
         overdue: !!due && due < today, due_soon: !!due && due <= week, due_today: due === today,
         project: p ? p.name : '', horizon: p ? p.horizon : '',
       };
