@@ -41,6 +41,7 @@
     <div class="hd-bar">
       <div class="grp" role="group" aria-label="Crea"><span class="gl">Crea</span>
         <div class="gb">
+          <button class="cm-hero-btn cm-add" id="add-note" type="button">+ Nota</button>
           <button class="cm-hero-btn cm-add" id="add-task" type="button">+ Task</button>
           <button class="cm-hero-btn cm-add" id="add-event" type="button">+ Evento</button>
           <button class="cm-hero-btn cm-add" id="add-mail" type="button">+ Email</button>
@@ -64,6 +65,7 @@
     <nav class="hd-nav" id="hd-nav" aria-label="Vai alla sezione"><span class="gl">Vai a</span>
       <div class="gb">
         <a class="nv" href="#agenda" data-go="agenda" style="--c:#25E2CC"><i></i>Agenda</a>
+        <a class="nv" href="#notes" data-go="notes" style="--c:#8E7CC3"><i></i>Note</a>
         <a class="nv" href="#map" data-go="map" style="--c:#25E2CC"><i></i>Mappa</a>
         <a class="nv" href="#next-actions" data-go="next-actions" style="--c:#FF8400"><i></i>Cosa fare</a>
         <a class="nv" href="#attention-card" data-go="attention-card" style="--c:#E86A92"><i></i>Da guardare</a>
@@ -107,6 +109,26 @@
         <ul class="cm-list" id="day-tasks" style="--acc:var(--b-tang)"></ul>
         <div class="cm-legend-row dy-legend" id="day-legend"></div>
       </aside>
+    </div>
+  </section>
+
+  <section class="cm-card accent-top" id="notes" style="--acc:#8E7CC3">
+    <div class="cm-card-head">
+      <div>
+        <h2 class="cm-h2" style="--acc:#8E7CC3"><span class="dot"></span>Note</h2>
+        <p class="cm-sub">Workbook, notebook e note, come in OneNote. Si salvano da sole in Notion (database Notes) e restano anche su questo dispositivo. <span id="nt-sync"></span></p>
+      </div>
+      <div class="cm-controls">
+        <input class="nt-q" id="nt-q" type="search" placeholder="Cerca nelle note" aria-label="Cerca nelle note">
+      </div>
+    </div>
+    <div class="nt-board" id="nt-board" data-view="wb">
+      <nav class="nt-col nt-tree" id="nt-tree" aria-label="Workbook e notebook"></nav>
+      <div class="nt-col nt-mid">
+        <div class="nt-list-head"><button class="cm-btn nt-back" id="nt-list-back" type="button">‹ Notebook</button><span id="nt-list-head"></span></div>
+        <div class="nt-list" id="nt-list"></div>
+      </div>
+      <div class="nt-editor" id="nt-editor"></div>
     </div>
   </section>
 
@@ -293,6 +315,52 @@
     <div class="f-actions">
       <button class="btn" id="d-save" type="submit">Crea il Doc</button>
       <button class="btn ghost" id="d-cancel" type="button">Annulla</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="task" id="quick-dialog">
+  <form id="quick-form" method="dialog">
+    <h2>Nota rapida</h2>
+    <p class="cm-sub">Finisce nell'Inbox, se non scegli altro. La smisti dopo dalla sezione Note.</p>
+    <div class="f-field"><label for="qn-title">Titolo (facoltativo)</label><input class="field-in" id="qn-title" maxlength="200"></div>
+    <div class="f-field"><label for="qn-text">Nota</label><textarea class="field-in" id="qn-text" rows="6" maxlength="20000" placeholder="- elenco   [ ] da fare"></textarea></div>
+    <div class="f-row">
+      <div class="f-field"><label for="qn-wb">Workbook</label><select class="field-in" id="qn-wb"></select></div>
+      <div class="f-field"><label for="qn-nb">Notebook</label><input class="field-in" id="qn-nb" list="qn-nb-list" maxlength="80"><datalist id="qn-nb-list"></datalist></div>
+    </div>
+    <div class="form-msg" id="qn-msg" hidden></div>
+    <div class="f-actions">
+      <button class="btn" type="submit">Salva nota</button>
+      <button class="btn ghost" id="qn-cancel" type="button">Annulla</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="task" id="name-dialog">
+  <form id="name-form" method="dialog">
+    <h2 id="n-title">Nuovo</h2>
+    <div class="f-field"><label for="n-input" id="n-label">Nome</label><input class="field-in" id="n-input" maxlength="80" required></div>
+    <p class="cm-sub">Creo subito una prima nota vuota, così il nome resta salvato in Notion.</p>
+    <div class="form-msg" id="n-msg" hidden></div>
+    <div class="f-actions">
+      <button class="btn" type="submit">Crea</button>
+      <button class="btn ghost" id="n-cancel" type="button">Annulla</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="task" id="move-dialog">
+  <form id="move-form" method="dialog">
+    <h2>Sposta la nota</h2>
+    <div class="f-field"><label for="mv-wb">Workbook</label><select class="field-in" id="mv-wb"></select>
+      <input class="field-in" id="mv-wb-new" maxlength="80" placeholder="Nome del nuovo workbook" hidden></div>
+    <div class="f-field"><label for="mv-nb">Notebook</label><input class="field-in" id="mv-nb" list="mv-nb-list" maxlength="80" required><datalist id="mv-nb-list"></datalist>
+      <span class="f-hint">Scegline uno esistente o scrivi un nome nuovo.</span></div>
+    <div class="form-msg" id="mv-msg" hidden></div>
+    <div class="f-actions">
+      <button class="btn" type="submit">Sposta</button>
+      <button class="btn ghost" id="mv-cancel" type="button">Annulla</button>
     </div>
   </form>
 </dialog>

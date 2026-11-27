@@ -154,7 +154,7 @@
   async function refreshAll(force) {
     const btn = $('refresh'); btn.disabled = true; btn.textContent = 'Aggiorno…';
     document.body.classList.add('is-refreshing-all');
-    await Promise.all([loadNotion(force), loadCalendar(S.day, true), loadExtras()]);
+    await Promise.all([loadNotion(force), loadCalendar(S.day, true), loadExtras(), loadNotes()]);
     btn.disabled = false; btn.textContent = 'Aggiorna';
     document.body.classList.remove('is-refreshing-all');
     redrawAll();
@@ -541,7 +541,14 @@
   /* ---------- Redraw ---------- */
   function redrawAll() {
     drawSync(); drawHeadline(); drawAgenda(); drawMap(); drawAttention(); drawTasks();
-    drawLoad(); drawStatus(); drawLog(); drawDecisions(); drawGoogle(); drawPortfolio();
+    drawLoad(); drawStatus(); drawLog(); drawDecisions(); drawGoogle(); drawPortfolio(); drawNotesSoft();
+  }
+  /* Le note si ridisegnano senza toccare l'editor se ci stai scrivendo. */
+  function drawNotesSoft() {
+    const ed = $('nt-editor'); if (!ed) return;
+    const focused = ed.contains(document.activeElement);
+    const box = $('nt-board'); box.dataset.view = NT.q ? 'list' : NT.view;
+    drawNoteTree(); drawNoteList(); if (!focused) drawNoteEditor(); drawNoteStatus();
   }
 
   /* ---------- Claude (abbonamento): copia il contesto e apre claude.ai ---------- */
@@ -598,6 +605,7 @@
     $('t-save').disabled = true;
     try {
       const r = await api('/api/tasks', { method: 'POST', body });
+      markConverted(r && r.url);
       $('task-dialog').close();
       toast('Task creata in Notion');
       await loadNotion(true); redrawAll();
@@ -671,11 +679,508 @@
     const name = $('d-name').value.trim(); if (!name) return;
     $('d-save').disabled = true;
     try {
-      await api('/api/drive/docs', { method: 'POST', body: { name, content: $('d-text').value } });
+      const r = await api('/api/drive/docs', { method: 'POST', body: { name, content: $('d-text').value } });
+      markConverted(r && (r.url || r.doc_url));
       $('doc-dialog').close(); toast('Doc creato su Drive'); loadExtras();
     } catch (e) { showMsg('d-msg', e.message); $('d-save').disabled = false; }
   });
   $('d-cancel').addEventListener('click', () => $('doc-dialog').close());
+
+  /* ---------- Note: Workbook › Notebook › Nota ----------
+     Prima salvo sul dispositivo, poi invio a Notion (2 secondi dopo che smetti di scrivere).
+     Se il Worker non risponde le modifiche restano qui e partono al primo collegamento. */
+  const NOTE_COLORS = { default: '#8AA0AD', gray: '#7FB3C8', brown: '#B08968', orange: BRAND.tang, yellow: BRAND.sun, green: BRAND.jade, blue: BRAND.sea, purple: '#8E7CC3', pink: '#E86A92', red: BRAND.rasp };
+  const NT = {
+    state: 'idle', err: '', workbooks: [], notes: [],
+    wb: null, nb: null, cur: null, q: '', view: 'wb',
+    bodies: {},     // id -> { content, base, readonly, loading }
+    pending: {},    // id -> { fields…, content?, base_content? }
+    inflight: {}, timers: {}, conflict: null, lastSaved: null, offline: false,
+  };
+  const jget = (k, d) => { try { const v = JSON.parse(store.get(k) || 'null'); return v == null ? d : v; } catch (e) { return d; } };
+  const persistNotes = () => {
+    store.set('cm_notes', JSON.stringify({ workbooks: NT.workbooks, notes: NT.notes }));
+    store.set('cm_notes_bodies', JSON.stringify(NT.bodies, (k, v) => (k === 'loading' ? undefined : v)));
+    store.set('cm_notes_pending', JSON.stringify(NT.pending));
+    store.set('cm_notes_sel', JSON.stringify({ wb: NT.wb, nb: NT.nb, cur: NT.cur }));
+  };
+  function hydrateNotes() {
+    const c = jget('cm_notes', null);
+    if (c && Array.isArray(c.notes)) { NT.workbooks = c.workbooks || []; NT.notes = c.notes; NT.state = 'ok'; }
+    NT.bodies = jget('cm_notes_bodies', {});
+    NT.pending = jget('cm_notes_pending', {});
+    const s = jget('cm_notes_sel', {});
+    NT.wb = s.wb || null; NT.nb = s.nb || null; NT.cur = s.cur || null;
+  }
+  const noteById = (id) => NT.notes.find((n) => n.id === id);
+  const isTmp = (id) => String(id).startsWith('tmp-');
+  const wbColor = (name) => { const o = NT.workbooks.find((w) => w.name === name); return NOTE_COLORS[(o && o.color) || 'default'] || NOTE_COLORS.default; };
+  const visibleNotes = () => NT.notes.filter((n) => n.stato !== 'Archiviata');
+  function workbookList() {
+    const names = NT.workbooks.map((w) => w.name);
+    visibleNotes().forEach((n) => { if (!names.includes(n.workbook)) names.push(n.workbook); });
+    return names;
+  }
+  function notebookList(wb) {
+    const list = [];
+    visibleNotes().filter((n) => n.workbook === wb).forEach((n) => { if (!list.includes(n.notebook)) list.push(n.notebook); });
+    return list.sort((a, b) => a.localeCompare(b, 'it'));
+  }
+  const byEdited = (a, b) => String(b.edited || '').localeCompare(String(a.edited || ''));
+
+  async function loadNotes() {
+    if (NT.state !== 'ok') NT.state = 'loading';
+    drawNotes();
+    try {
+      const d = await api('/api/notes');
+      /* Le note con modifiche non ancora inviate tengono la versione locale. */
+      const local = {};
+      NT.notes.forEach((n) => { if (NT.pending[n.id]) local[n.id] = n; });
+      const fresh = (d.notes || []).map((n) => local[n.id] || n);
+      NT.notes.filter((n) => isTmp(n.id)).forEach((n) => fresh.unshift(n));
+      NT.notes = fresh; NT.workbooks = d.workbooks || [];
+      NT.state = 'ok'; NT.err = ''; NT.offline = false;
+      const ids = new Set(NT.notes.map((n) => n.id));
+      Object.keys(NT.bodies).forEach((id) => { if (!ids.has(id)) delete NT.bodies[id]; });
+      persistNotes();
+    } catch (e) {
+      if (e.status === 401) return;
+      NT.err = e.message;
+      if (NT.state !== 'ok') NT.state = 'error'; else NT.offline = true;
+    }
+    fixSelection(); drawNotes(); flushAll();
+  }
+
+  function fixSelection() {
+    const wbs = workbookList();
+    if (!NT.wb || !wbs.includes(NT.wb)) NT.wb = wbs.find((w) => notebookList(w).length) || wbs[0] || null;
+    const nbs = NT.wb ? notebookList(NT.wb) : [];
+    if (!NT.nb || !nbs.includes(NT.nb)) NT.nb = nbs[0] || null;
+    const cur = NT.cur && noteById(NT.cur);
+    if (!cur || cur.stato === 'Archiviata') NT.cur = null;
+  }
+
+  /* Apre una nota: mostra subito la copia locale, poi chiede a Notion la versione aggiornata. */
+  async function openNote(id, opts) {
+    NT.cur = id; NT.conflict = null;
+    const n = noteById(id); if (n) { NT.wb = n.workbook; NT.nb = n.notebook; }
+    NT.view = 'note'; persistNotes(); drawNotes(true);
+    if (isTmp(id)) return;
+    const b = NT.bodies[id] || (NT.bodies[id] = { content: '', base: '', readonly: false });
+    if (NT.pending[id] && 'content' in NT.pending[id]) return;
+    if (!b.fetched) b.loading = true;
+    if (opts && opts.noFetch) return;
+    try {
+      const d = await api('/api/notes/' + id);
+      const nowB = NT.bodies[id];
+      if (!nowB || (NT.pending[id] && 'content' in NT.pending[id])) return;
+      Object.assign(nowB, { content: d.content, base: d.content, readonly: !!d.readonly, fetched: true, loading: false });
+      const i = NT.notes.findIndex((x) => x.id === id); if (i >= 0) NT.notes[i] = Object.assign({}, NT.notes[i], pick(d));
+      persistNotes();
+      if (NT.cur !== id) return;
+      const ta = $('nt-body');
+      if (ta && !d.readonly && document.activeElement !== $('nt-title')) {
+        /* Aggiorno solo il testo, senza ridisegnare: se stai già scrivendo nel titolo non perdi il cursore. */
+        if (ta.value !== d.content) ta.value = d.content;
+        ta.classList.remove('dash-skeleton'); drawNoteList(); drawNoteStatus();
+      } else if (!ta || d.readonly) drawNotes(true);
+    } catch (e) {
+      if (NT.bodies[id]) NT.bodies[id].loading = false;
+      if (e.status === 410 || e.status === 404) { NT.notes = NT.notes.filter((x) => x.id !== id); NT.cur = null; persistNotes(); toast('La nota non esiste più in Notion'); drawNotes(true); return; }
+      if (NT.cur === id) { NT.offline = true; drawNoteStatus(); }
+    }
+  }
+  const pick = (d) => ({ id: d.id, url: d.url, title: d.title, workbook: d.workbook, notebook: d.notebook, stato: d.stato, diventata: d.diventata, project_ids: d.project_ids, created: d.created, edited: d.edited });
+
+  /* Crea una nota (prima sul dispositivo, poi in Notion). */
+  function newNote(fields, open) {
+    const id = 'tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+    const now = new Date().toISOString();
+    const n = { id, url: '', title: fields.title || '', workbook: fields.workbook, notebook: fields.notebook, stato: 'Attiva', diventata: '', project_ids: fields.project_id ? [fields.project_id] : [], created: now, edited: now };
+    NT.notes.unshift(n);
+    NT.bodies[id] = { content: fields.content || '', base: '', readonly: false, fetched: true };
+    NT.pending[id] = { title: n.title, workbook: n.workbook, notebook: n.notebook, content: fields.content || '' };
+    if (fields.project_id) NT.pending[id].project_id = fields.project_id;
+    persistNotes();
+    if (open) openNote(id); else drawNotes();
+    flushNote(id);
+    return id;
+  }
+
+  /* Registra una modifica e programma l'invio. */
+  function queueChange(id, fields, now) {
+    const n = noteById(id); if (!n) return;
+    const p = NT.pending[id] || (NT.pending[id] = {});
+    Object.assign(p, fields);
+    if ('content' in fields) {
+      const b = NT.bodies[id] || (NT.bodies[id] = { content: '', base: '', readonly: false });
+      b.content = fields.content;
+      if (!('base_content' in p)) p.base_content = b.base || '';
+    }
+    ['title', 'workbook', 'notebook', 'stato', 'diventata'].forEach((k) => { if (k in fields) n[k] = fields[k]; });
+    if ('project_id' in fields) n.project_ids = fields.project_id ? [fields.project_id] : [];
+    n.edited = new Date().toISOString();
+    persistNotes();
+    clearTimeout(NT.timers[id]);
+    NT.timers[id] = setTimeout(() => flushNote(id), now ? 0 : 2000);
+    drawNoteStatus();
+  }
+
+  async function flushNote(id, force) {
+    clearTimeout(NT.timers[id]);
+    const p = NT.pending[id]; if (!p) return;
+    if (force) p.force = true;
+    /* Con un conflitto aperto aspetto la tua scelta, senza ritentare da solo. */
+    if (NT.conflict && NT.conflict.id === id && !p.force) return;
+    if (NT.inflight[id]) { NT.inflight[id].again = true; return; }
+    const sent = JSON.parse(JSON.stringify(p));
+    NT.inflight[id] = { again: false };
+    drawNoteStatus();
+    try {
+      let d, sentKeys;
+      if (isTmp(id)) {
+        /* Nota nuova: la creo. Stato e link, se cambiati nel frattempo, partono subito dopo. */
+        sentKeys = ['title', 'workbook', 'notebook', 'content', 'project_id', 'base_content'].filter((k) => k in sent);
+        d = await api('/api/notes', { method: 'POST', body: { title: sent.title, workbook: sent.workbook, notebook: sent.notebook, content: sent.content || '', project_id: sent.project_id || undefined } });
+      } else {
+        sentKeys = Object.keys(sent);
+        d = await api('/api/notes/' + id, { method: 'POST', body: sent });
+      }
+      const newId = d.id;
+      const cur = NT.pending[id];
+      /* Tolgo dal pendente solo ciò che è stato inviato e non è cambiato nel frattempo. */
+      sentKeys.forEach((k) => { if (cur && JSON.stringify(cur[k]) === JSON.stringify(sent[k])) delete cur[k]; });
+      if (cur && 'base_content' in cur && !('content' in cur)) delete cur.base_content;
+      if (cur && !('content' in cur)) delete cur.force;
+      const b = NT.bodies[id] || { content: '', readonly: false };
+      if (typeof d.content === 'string') { b.base = d.content; if (cur && 'content' in cur) cur.base_content = d.content; }
+      b.fetched = true;
+      const idx = NT.notes.findIndex((x) => x.id === id);
+      if (idx >= 0) {
+        const local = NT.notes[idx];
+        const merged = Object.assign({}, pick(d));
+        if (cur) ['title', 'workbook', 'notebook', 'stato', 'diventata'].forEach((k) => { if (k in cur) merged[k] = local[k]; });
+        NT.notes[idx] = merged;
+      }
+      if (newId !== id) {
+        /* Nota nuova o ricreata: cambia l'indirizzo in Notion. */
+        NT.bodies[newId] = b; delete NT.bodies[id];
+        if (cur && Object.keys(cur).length) NT.pending[newId] = cur;
+        delete NT.pending[id];
+        if (NT.cur === id) NT.cur = newId;
+        if (NT.inflight[id]) NT.inflight[newId] = NT.inflight[id];
+      } else if (cur && !Object.keys(cur).length) delete NT.pending[id];
+      const fin = NT.inflight[newId] || NT.inflight[id];
+      delete NT.inflight[id]; delete NT.inflight[newId];
+      NT.lastSaved = new Date(); NT.offline = false; NT.conflict = null;
+      if (NT.notes[idx] && NT.notes[idx].stato === 'Archiviata') { NT.notes.splice(idx, 1); delete NT.bodies[newId]; delete NT.pending[newId]; if (NT.cur === newId) NT.cur = null; fixSelection(); }
+      persistNotes();
+      /* Non ridisegno l'editor: perderesti il punto in cui stai scrivendo. */
+      drawNoteTree(); drawNoteList(); drawNoteStatus();
+      if (!NT.cur) drawNoteEditor();
+      if (fin && fin.again || NT.pending[newId]) { clearTimeout(NT.timers[newId]); NT.timers[newId] = setTimeout(() => flushNote(newId), 600); }
+    } catch (e) {
+      delete NT.inflight[id];
+      if (e.status === 401) { drawNoteStatus(); return; }
+      if (e.code === 'conflict') {
+        /* Le altre modifiche (titolo, posizione, stato) non aspettano: le invio da sole. */
+        const cur = NT.pending[id]; NT.conflict = { id, message: e.message };
+        const props = {}; if (cur) Object.keys(cur).forEach((k) => { if (!['content', 'base_content', 'force'].includes(k)) props[k] = cur[k]; });
+        drawNoteStatus();
+        if (Object.keys(props).length) {
+          try { const d2 = await api('/api/notes/' + id, { method: 'POST', body: props }); Object.keys(props).forEach((k) => { if (cur && JSON.stringify(cur[k]) === JSON.stringify(props[k])) delete cur[k]; }); const i2 = NT.notes.findIndex((x) => x.id === id); if (i2 >= 0) NT.notes[i2] = Object.assign({}, NT.notes[i2], { url: d2.url, edited: d2.edited, stato: d2.stato, diventata: d2.diventata }); if (d2.stato === 'Archiviata') { NT.notes = NT.notes.filter((x) => x.id !== id); delete NT.pending[id]; delete NT.bodies[id]; if (NT.cur === id) { NT.cur = null; NT.conflict = null; } } persistNotes(); drawNoteTree(); drawNoteList(); drawNoteStatus(); }
+          catch (e2) { /* resta in attesa */ }
+        }
+        return;
+      }
+      if (e.code === 'readonly') {
+        const cur = NT.pending[id]; if (cur) { delete cur.content; delete cur.base_content; if (!Object.keys(cur).length) delete NT.pending[id]; }
+        if (NT.bodies[id]) NT.bodies[id].readonly = true;
+        persistNotes(); toast(e.message); openNote(id); return;
+      }
+      if (e.status === 410 || e.status === 404) {
+        NT.notes = NT.notes.filter((x) => x.id !== id); delete NT.pending[id]; delete NT.bodies[id];
+        if (NT.cur === id) NT.cur = null; persistNotes(); toast('La nota non esiste più in Notion'); drawNotes(); return;
+      }
+      if (e.status === 400) { NT.err = e.message; toast(e.message); drawNoteStatus(); return; }
+      NT.offline = true; drawNoteStatus();
+    }
+  }
+  function flushAll() { Object.keys(NT.pending).forEach((id) => { if (!NT.inflight[id]) flushNote(id); }); }
+
+  /* Conflitto: la nota è cambiata in Notion mentre la modificavi qui. */
+  async function resolveConflict(keepMine) {
+    const c = NT.conflict; if (!c) return;
+    NT.conflict = null;
+    if (keepMine) { if (NT.pending[c.id]) NT.pending[c.id].force = true; flushNote(c.id, true); return; }
+    const p = NT.pending[c.id]; if (p) { delete p.content; delete p.base_content; if (!Object.keys(p).length) delete NT.pending[c.id]; }
+    if (NT.bodies[c.id]) NT.bodies[c.id].fetched = false;
+    persistNotes(); openNote(c.id);
+  }
+
+  /* Disegno */
+  function drawNotes(editorToo) {
+    const box = $('nt-board'); if (!box) return;
+    box.dataset.view = NT.q ? 'list' : NT.view;
+    drawNoteTree(); drawNoteList();
+    if (editorToo !== false) drawNoteEditor();
+    drawNoteStatus();
+  }
+  function drawNoteTree() {
+    const tree = $('nt-tree');
+    if (NT.state === 'loading' && !NT.notes.length) { tree.replaceChildren(el('p', 'cm-empty', 'Carico le note…')); return; }
+    if (NT.state === 'error') { failedLine(tree, loadNotes); tree.append(el('p', 'dy-note', NT.err)); return; }
+    const out = [el('p', 'nt-lbl', 'Workbook')];
+    workbookList().forEach((w) => {
+      const b = el('button', 'nt-wb' + (w === NT.wb ? ' on' : '')); b.type = 'button';
+      b.style.setProperty('--wc', wbColor(w));
+      b.append(el('i'), el('span', '', w), el('span', 'nt-ct', String(visibleNotes().filter((n) => n.workbook === w).length)));
+      b.addEventListener('click', () => { NT.wb = w; NT.nb = notebookList(w)[0] || null; NT.cur = null; NT.q = ''; $('nt-q').value = ''; NT.view = 'wb'; persistNotes(); drawNotes(); });
+      out.push(b);
+      if (w === NT.wb) {
+        notebookList(w).forEach((nb) => {
+          const x = el('button', 'nt-nb' + (nb === NT.nb && !NT.q ? ' on' : '')); x.type = 'button';
+          x.append(el('span', '', nb), el('span', 'nt-ct', String(visibleNotes().filter((n) => n.workbook === w && n.notebook === nb).length)));
+          x.addEventListener('click', () => { NT.nb = nb; NT.q = ''; $('nt-q').value = ''; NT.view = 'list'; persistNotes(); drawNotes(false); });
+          out.push(x);
+        });
+        const add = el('button', 'nt-nb nt-add', '+ Notebook'); add.type = 'button';
+        add.addEventListener('click', () => askName('Nuovo notebook in ' + w, 'Nome del notebook', (name) => {
+          NT.nb = name; NT.q = '';
+          if (notebookList(w).includes(name)) { NT.view = 'list'; persistNotes(); drawNotes(); toast('Il notebook ' + name + ' esiste già: l\'ho aperto'); return; }
+          newNote({ workbook: w, notebook: name, title: '' }, true);
+        }));
+        out.push(add);
+      }
+    });
+    const addW = el('button', 'nt-wb nt-add', '+ Workbook'); addW.type = 'button';
+    addW.addEventListener('click', () => askName('Nuovo workbook', 'Nome del workbook', (name) => {
+      const ex = notebookList(name); NT.wb = name; NT.q = '';
+      if (ex.length) { NT.nb = ex[0]; NT.view = 'wb'; persistNotes(); drawNotes(); toast('Il workbook ' + name + ' esiste già: l\'ho aperto'); return; }
+      NT.nb = 'Generale'; newNote({ workbook: name, notebook: 'Generale', title: '' }, true);
+    }));
+    out.push(addW);
+    tree.replaceChildren(...out);
+  }
+  function noteSnippet(n) {
+    const b = NT.bodies[n.id]; const t = b && b.content ? b.content.split('\n').find((l) => l.trim()) || '' : '';
+    return t.replace(/^(\s*[-*•]\s+|\s*\[[ xX]\]\s?)/, '').slice(0, 70);
+  }
+  function drawNoteList() {
+    const list = $('nt-list'), head = $('nt-list-head');
+    const q = NT.q.trim().toLowerCase();
+    let rows;
+    if (q) {
+      rows = visibleNotes().filter((n) => (n.title || '').toLowerCase().includes(q) || ((NT.bodies[n.id] && NT.bodies[n.id].content) || '').toLowerCase().includes(q));
+      head.textContent = rows.length + (rows.length === 1 ? ' nota trovata' : ' note trovate');
+    } else {
+      rows = visibleNotes().filter((n) => n.workbook === NT.wb && n.notebook === NT.nb);
+      head.textContent = NT.wb ? NT.wb + (NT.nb ? ' › ' + NT.nb : '') : 'Nessun workbook';
+    }
+    rows.sort(byEdited);
+    const items = rows.map((n) => {
+      const b = el('button', 'nt-it' + (n.id === NT.cur ? ' on' : '')); b.type = 'button';
+      const t = el('span', 'nt-it-t', n.title || 'Senza titolo'); if (!n.title) t.classList.add('is-empty');
+      const meta = [q ? n.workbook + ' › ' + n.notebook : '', n.edited ? fmtDate(String(n.edited).slice(0, 10)) : '', n.stato === 'Trasformata' ? 'trasformata' : '', NT.pending[n.id] ? 'da inviare' : ''].filter(Boolean).join(' · ');
+      b.append(t, el('span', 'nt-it-s', noteSnippet(n) || ' '), el('span', 'nt-it-m', meta));
+      b.addEventListener('click', () => openNote(n.id));
+      return b;
+    });
+    if (!q && NT.wb && NT.nb) {
+      const add = el('button', 'nt-it nt-add', '+ Nuova nota'); add.type = 'button';
+      add.addEventListener('click', () => newNote({ workbook: NT.wb, notebook: NT.nb, title: '' }, true));
+      items.push(add);
+    }
+    if (!items.length) items.push(el('p', 'cm-empty', q ? 'Nessuna nota con queste parole.' : 'Scegli o crea un notebook a sinistra.'));
+    list.replaceChildren(...items);
+  }
+  function drawNoteEditor() {
+    const ed = $('nt-editor');
+    const n = NT.cur && noteById(NT.cur);
+    if (!n) {
+      ed.replaceChildren(el('p', 'cm-empty nt-placeholder', NT.notes.length ? 'Apri una nota dall\'elenco, o creane una nuova.' : 'Nessuna nota ancora. Crea un workbook o usa “+ Nota” in alto.'));
+      return;
+    }
+    const b = NT.bodies[n.id] || { content: '', readonly: false };
+    const back = el('button', 'cm-btn nt-back', '‹ Note'); back.type = 'button';
+    back.addEventListener('click', () => { NT.view = 'list'; drawNotes(false); });
+    const path = el('div', 'nt-path'); path.append(back, el('span', '', n.workbook + ' › ' + n.notebook));
+    const title = el('input', 'field-in nt-title'); title.id = 'nt-title'; title.value = n.title || ''; title.placeholder = 'Titolo'; title.maxLength = 200;
+    title.addEventListener('input', () => { queueChange(NT.cur, { title: title.value }); const it = document.querySelector('#nt-list .nt-it.on .nt-it-t'); if (it) { it.textContent = title.value || 'Senza titolo'; it.classList.toggle('is-empty', !title.value); } });
+    const body = el('textarea', 'field-in nt-body'); body.id = 'nt-body'; body.value = b.content || ''; body.placeholder = 'Scrivi… Una riga con “- ” diventa un elenco, con “[ ] ” una checkbox.'; body.maxLength = 20000;
+    body.readOnly = !!b.readonly;
+    body.addEventListener('input', () => queueChange(NT.cur, { content: body.value }));
+    body.addEventListener('blur', () => { if (NT.pending[NT.cur]) flushNote(NT.cur); });
+    const kids = [path, title];
+    if (b.readonly) kids.push(el('p', 'form-msg', 'Questa nota contiene elementi aggiunti in Notion (titoli, immagini, tabelle…): qui puoi leggerla e cambiarne titolo o posizione, il testo si modifica da Notion.'));
+    if (b.loading && !b.content) body.classList.add('dash-skeleton');
+    kids.push(body);
+    const conflict = el('div', 'form-msg err nt-conflict'); conflict.id = 'nt-conflict'; conflict.hidden = true;
+    kids.push(conflict);
+    const proj = el('select', 'field-in nt-proj'); proj.setAttribute('aria-label', 'Progetto');
+    proj.append(new Option('Nessun progetto', ''));
+    const d = S.derived;
+    if (d && d.portfolio) d.portfolio.filter((p) => p.status !== 'Backlog' || (n.project_ids || []).includes(p.project_id)).sort((a, c) => a.name.localeCompare(c.name)).forEach((p) => proj.append(new Option(shortName(p.name), p.project_id)));
+    proj.value = (n.project_ids || [])[0] || '';
+    if (proj.value !== ((n.project_ids || [])[0] || '')) { proj.append(new Option('Progetto collegato', n.project_ids[0])); proj.value = n.project_ids[0]; }
+    proj.addEventListener('change', () => queueChange(NT.cur, { project_id: proj.value }, true));
+    const acts = el('div', 'nt-acts');
+    const btn = (label, fn, extra) => { const x = el('button', 'cm-btn' + (extra ? ' ' + extra : ''), label); x.type = 'button'; x.addEventListener('click', fn); return x; };
+    acts.append(
+      btn('Trasforma in task', () => noteToTask(NT.cur), 'nt-main'),
+      btn('In bozza email', () => noteToMail(NT.cur)),
+      btn('In Doc su Drive', () => noteToDoc(NT.cur)),
+      btn('Sposta', () => moveNote(NT.cur)),
+      btn('Archivia', () => archiveNote(NT.cur)),
+    );
+    if (n.url) { const a = link('Apri in Notion', n.url); a.className = 'cm-btn'; acts.append(a); }
+    if (n.diventata) { const a = link('Vedi cosa è diventata', n.diventata); a.className = 'cm-btn'; acts.append(a); }
+    const foot = el('div', 'nt-foot'); foot.append(proj, el('span', 'nt-status', ''));
+    kids.push(acts, foot);
+    ed.replaceChildren(...kids);
+  }
+  function drawNoteStatus() {
+    const s = document.querySelector('#nt-editor .nt-status'), id = NT.cur;
+    const c = $('nt-conflict');
+    if (c) {
+      if (NT.conflict && NT.conflict.id === id) {
+        c.hidden = false;
+        const k1 = el('button', 'cm-btn', 'Tieni la versione di Notion'); k1.type = 'button'; k1.addEventListener('click', () => resolveConflict(false));
+        const k2 = el('button', 'cm-btn', 'Sovrascrivi con la mia'); k2.type = 'button'; k2.addEventListener('click', () => resolveConflict(true));
+        c.replaceChildren(el('span', '', 'La nota è stata modificata in Notion mentre la scrivevi qui. '), k1, k2);
+      } else c.hidden = true;
+    }
+    const pend = Object.keys(NT.pending).length;
+    const g = $('nt-sync');
+    if (g) g.textContent = pend ? pend + (pend === 1 ? ' nota da inviare a Notion' : ' note da inviare a Notion') + (NT.offline ? ' · nessuna connessione, riprovo da solo' : '') : (NT.offline ? 'Note salvate sul dispositivo: Notion non raggiungibile' : '');
+    if (!s || !id) return;
+    let text, cls = '';
+    if (NT.inflight[id]) text = 'Salvo…';
+    else if (NT.pending[id]) { text = NT.offline ? 'Salvata sul dispositivo, la invio appena torna la connessione' : 'Modifiche in corso'; cls = 'is-wait'; }
+    else if (NT.lastSaved) text = 'Salvata in Notion · ' + NT.lastSaved.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    else text = isTmp(id) ? '' : 'Salvata in Notion';
+    s.textContent = text; s.className = 'nt-status ' + cls;
+  }
+
+  /* Piccola finestra per dare un nome (workbook, notebook). */
+  function askName(title, label, done, initial) {
+    $('n-title').textContent = title; $('n-label').textContent = label;
+    $('n-input').value = initial || ''; $('n-msg').hidden = true;
+    const dlg = $('name-dialog'); dlg._done = done; openDlg('name-dialog'); setTimeout(() => $('n-input').focus(), 30);
+  }
+  $('name-form').addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    const v = $('n-input').value.trim();
+    if (!v || v.length > 80 || v.includes(',')) { showMsg('n-msg', 'Max 80 caratteri e senza virgole'); return; }
+    const dlg = $('name-dialog'); dlg.close(); if (dlg._done) dlg._done(v);
+  });
+  $('n-cancel').addEventListener('click', () => $('name-dialog').close());
+
+  /* Sposta in un altro workbook / notebook. */
+  let moving = null;
+  function fillMoveLists(wb) {
+    const nbs = notebookList(wb);
+    $('mv-nb-list').replaceChildren(...nbs.map((x) => new Option(x, x)));
+  }
+  function moveNote(id) {
+    const n = noteById(id); if (!n) return;
+    moving = id;
+    const sel = $('mv-wb');
+    sel.replaceChildren(...workbookList().map((w) => new Option(w, w)), new Option('+ Nuovo workbook…', '__new'));
+    sel.value = n.workbook; $('mv-wb-new').hidden = true; $('mv-wb-new').value = '';
+    $('mv-nb').value = n.notebook; fillMoveLists(n.workbook); $('mv-msg').hidden = true;
+    openDlg('move-dialog');
+  }
+  $('mv-wb').addEventListener('change', () => { const nw = $('mv-wb').value === '__new'; $('mv-wb-new').hidden = !nw; if (!nw) fillMoveLists($('mv-wb').value); });
+  $('move-form').addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    const wb = ($('mv-wb').value === '__new' ? $('mv-wb-new').value : $('mv-wb').value).trim(), nb = $('mv-nb').value.trim();
+    const okName = (v) => v && v.length <= 80 && !v.includes(',');
+    if (!okName(wb) || !okName(nb)) { showMsg('mv-msg', 'Workbook e notebook: max 80 caratteri, senza virgole'); return; }
+    $('move-dialog').close();
+    queueChange(moving, { workbook: wb, notebook: nb }, true);
+    NT.wb = wb; NT.nb = nb; persistNotes(); drawNotes(); toast('Nota spostata in ' + wb + ' › ' + nb);
+  });
+  $('mv-cancel').addEventListener('click', () => $('move-dialog').close());
+
+  function archiveNote(id) {
+    const n = noteById(id); if (!n) return;
+    if (!window.confirm('Archivio “' + (n.title || 'Senza titolo') + '”? Resta in Notion con stato Archiviata.')) return;
+    if (isTmp(id) && !NT.inflight[id]) {
+      NT.notes = NT.notes.filter((x) => x.id !== id); delete NT.pending[id]; delete NT.bodies[id];
+    } else {
+      queueChange(id, { stato: 'Archiviata' }, true);
+      n.stato = 'Archiviata';
+    }
+    NT.cur = null; NT.view = 'list'; fixSelection(); persistNotes(); drawNotes(); toast('Nota archiviata');
+  }
+
+  /* Da nota a task, email o Doc. */
+  let fromNote = null;
+  const noteText = (id) => ((NT.bodies[id] && NT.bodies[id].content) || '').trim();
+  function noteToTask(id) {
+    const n = noteById(id); if (!n) return;
+    openTaskDialog();
+    fromNote = id;
+    $('t-title').value = (n.title || noteText(id).split('\n')[0] || '').slice(0, 300);
+    $('t-notes').value = noteText(id).slice(0, 1900);
+    const pid = (n.project_ids || [])[0];
+    if (pid && [...$('t-proj').options].some((o) => o.value === pid)) $('t-proj').value = pid;
+  }
+  function noteToMail(id) {
+    const n = noteById(id); if (!n) return;
+    if (needGoogle()) return;
+    openMailDialog();
+    $('m-subj').value = (n.title || '').slice(0, 300); $('m-body').value = noteText(id);
+  }
+  function noteToDoc(id) {
+    const n = noteById(id); if (!n) return;
+    if (needGoogle()) return;
+    openDocDialog();
+    fromNote = id;
+    $('d-name').value = (n.title || 'Nota').slice(0, 200); $('d-text').value = noteText(id);
+  }
+  /* Dopo la creazione di una task o di un Doc partito da una nota: la nota diventa "Trasformata". */
+  function markConverted(url) {
+    const id = fromNote; fromNote = null;
+    if (!id || !noteById(id)) return;
+    const f = { stato: 'Trasformata' }; if (url && /^https:\/\//.test(url)) f.diventata = url;
+    queueChange(id, f, true);
+    if (NT.cur === id) drawNoteEditor();
+  }
+  ['task-dialog', 'doc-dialog'].forEach((d) => $(d).addEventListener('close', () => { setTimeout(() => { if (!$('task-dialog').open && !$('doc-dialog').open) fromNote = null; }, 0); }));
+
+  /* Nota rapida dall'intestazione: va nell'Inbox, se non scegli altro. */
+  function openQuickNote() {
+    $('quick-form').reset(); $('qn-msg').hidden = true;
+    const wbs = workbookList(); if (!wbs.includes('Inbox')) wbs.unshift('Inbox');
+    $('qn-wb').replaceChildren(...wbs.map((w) => new Option(w, w)));
+    $('qn-wb').value = 'Inbox'; $('qn-nb').value = 'Rapide';
+    $('qn-nb-list').replaceChildren(...notebookList('Inbox').map((x) => new Option(x, x)));
+    openDlg('quick-dialog'); setTimeout(() => $('qn-text').focus(), 30);
+  }
+  $('qn-wb').addEventListener('change', () => { const nbs = notebookList($('qn-wb').value); $('qn-nb-list').replaceChildren(...nbs.map((x) => new Option(x, x))); $('qn-nb').value = nbs[0] || 'Generale'; });
+  $('quick-form').addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    const text = $('qn-text').value, title = $('qn-title').value.trim() || (text.trim().split('\n')[0] || '').slice(0, 80);
+    const wb = $('qn-wb').value, nb = $('qn-nb').value.trim() || 'Rapide';
+    if (!text.trim() && !title) { showMsg('qn-msg', 'Scrivi qualcosa'); return; }
+    if (nb.length > 80 || nb.includes(',')) { showMsg('qn-msg', 'Notebook: max 80 caratteri, senza virgole'); return; }
+    $('quick-dialog').close();
+    newNote({ workbook: wb, notebook: nb, title, content: text }, false);
+    toast('Nota salvata in ' + wb + ' › ' + nb);
+  });
+  $('qn-cancel').addEventListener('click', () => $('quick-dialog').close());
+
+  function bindNotes() {
+    $('add-note').addEventListener('click', openQuickNote);
+    $('nt-q').addEventListener('input', () => { NT.q = $('nt-q').value; drawNotes(false); });
+    $('nt-list-back').addEventListener('click', () => { NT.view = 'wb'; drawNotes(false); });
+    window.addEventListener('online', flushAll);
+    window.addEventListener('pagehide', () => { persistNotes(); });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { persistNotes(); flushAll(); } });
+    setInterval(() => { if (Object.keys(NT.pending).length && getPass()) flushAll(); }, 60000);
+  }
 
   /* ---------- Eventi ---------- */
   function bind() {
@@ -683,6 +1188,7 @@
     $('add-event').addEventListener('click', openEventDialog);
     $('add-mail').addEventListener('click', openMailDialog);
     $('add-doc').addEventListener('click', openDocDialog);
+    bindNotes();
     $('refresh').addEventListener('click', () => refreshAll(true));
     $('claude-brief').addEventListener('click', () => askClaude('brief'));
     $('claude-weekly').addEventListener('click', () => askClaude('weekly'));
@@ -701,7 +1207,7 @@
     let last = Date.now();
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState !== 'visible' || !getPass()) return;
-      if (Date.now() - last > 5 * 60000) { last = Date.now(); loadNotion(false).then(redrawAll); loadCalendar(S.day, true); }
+      if (Date.now() - last > 5 * 60000) { last = Date.now(); loadNotion(false).then(redrawAll); loadCalendar(S.day, true); loadNotes(); }
       else drawAgenda();
     });
     setInterval(() => { if (document.visibilityState === 'visible' && S.day === todayIso()) drawAgenda(); }, 60000);
@@ -714,11 +1220,12 @@
     started = true;
     hydrateFromCache();
     redrawAll();
-    Promise.all([loadNotion(false), loadCalendar(S.day), loadExtras()]).then(redrawAll);
+    Promise.all([loadNotion(false), loadCalendar(S.day), loadExtras(), loadNotes()]).then(redrawAll);
   }
 
   function init() {
     S.day = todayIso();
+    hydrateNotes(); fixSelection();
     setupSections();
     syncToggleAll();
     bind();

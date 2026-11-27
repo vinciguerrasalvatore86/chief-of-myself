@@ -277,3 +277,57 @@ dialog.task h2 { margin: 0; font-size: 1.25rem; }
 .cm-top { position: absolute; top: 12px; right: 12px; width: 26px; height: 26px; padding: 0; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font: inherit; font-size: 15px; font-weight: 700; line-height: 1; color: var(--color-fg-muted); background: var(--color-bg); border: 1px solid var(--color-border-line); cursor: pointer; }
 .cm-top:hover, .cm-top:focus-visible { background: var(--b-blue); color: #FFFFFF; border-color: var(--b-blue); outline: none; }
 .cm-card.is-collapsed > .cm-top { display: inline-flex !important; }
+
+/* Note: workbook › notebook › nota, come OneNote */
+.nt-q { font: inherit; font-size: var(--cds-font-size-caption); color: var(--color-fg); background: var(--color-bg); border: 1px solid var(--color-border-line); border-radius: 999px; padding: 5px 12px; width: 13rem; max-width: 100%; }
+.nt-q:focus-visible { outline: 2px solid #007380; outline-offset: 2px; }
+#nt-sync { color: var(--b-tang); font-weight: 600; }
+.nt-board { display: grid; grid-template-columns: minmax(0, 13rem) minmax(0, 15rem) minmax(0, 1fr); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); min-height: 26rem; overflow: hidden; }
+.nt-col { border-right: 1px solid var(--color-border-line); padding: var(--cds-pad-sm); display: grid; align-content: start; gap: 2px; min-width: 0; max-height: 34rem; overflow-y: auto; }
+.nt-tree { background: color-mix(in srgb, var(--b-blue) 4%, var(--color-panel)); }
+.nt-lbl { margin: 2px 8px 6px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--color-fg-muted); }
+.nt-wb, .nt-nb, .nt-it { all: unset; box-sizing: border-box; cursor: pointer; border-radius: 8px; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.nt-wb { padding: 7px 8px; font-weight: 600; margin-top: 4px; }
+.nt-wb i { width: 10px; height: 10px; border-radius: 3px; background: var(--wc); flex: none; }
+.nt-wb.on { box-shadow: inset 3px 0 0 var(--wc); background: color-mix(in srgb, var(--wc) 14%, transparent); }
+.nt-nb { padding: 5px 8px 5px 26px; font-size: 13px; color: var(--color-fg-muted); }
+.nt-nb.on { background: color-mix(in srgb, var(--b-sea) 16%, transparent); color: var(--color-fg); font-weight: 600; }
+.nt-wb span:first-of-type, .nt-nb span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nt-ct { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--color-fg-muted); font-variant-numeric: tabular-nums; }
+.nt-add { color: var(--color-fg-muted) !important; font-weight: 500 !important; font-size: 12px; }
+.nt-wb:hover, .nt-nb:hover, .nt-it:hover, .nt-wb:focus-visible, .nt-nb:focus-visible, .nt-it:focus-visible { background: color-mix(in srgb, var(--b-sea) 10%, transparent); }
+.nt-list-head { display: flex; align-items: center; gap: 8px; margin: 2px 6px 6px; font-size: 12px; font-weight: 600; color: var(--color-fg-muted); min-width: 0; }
+.nt-list-head span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nt-list { display: grid; gap: 2px; }
+.nt-it { display: grid; gap: 1px; padding: 8px 10px; border-bottom: 1px solid var(--color-border-line); border-radius: 8px 8px 0 0; }
+.nt-it.on { background: color-mix(in srgb, var(--b-sea) 16%, transparent); box-shadow: inset 3px 0 0 var(--b-sea); }
+.nt-it-t { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nt-it-t.is-empty { color: var(--color-fg-muted); font-style: italic; font-weight: 500; }
+.nt-it-s { font-size: 12px; color: var(--color-fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nt-it-m { font-size: 11px; color: var(--color-fg-muted); }
+.nt-it.nt-add { border-bottom: 0; }
+.nt-editor { padding: var(--cds-pad-md) var(--cds-pad-lg); display: grid; gap: 10px; align-content: start; min-width: 0; }
+.nt-placeholder { padding: 2rem 0; text-align: center; }
+.nt-path { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--color-fg-muted); }
+.nt-title { font-size: 1.15rem; font-weight: 600; }
+textarea.nt-body { min-height: 16rem; line-height: 1.6; font-size: 14px; }
+.nt-body[readonly] { opacity: .85; }
+.nt-conflict { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.nt-acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.nt-acts .cm-btn { text-decoration: none; }
+.nt-acts .nt-main { background: var(--b-blue); color: #FFFFFF; border-color: var(--b-blue); font-weight: 600; }
+.nt-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.nt-proj { width: auto; max-width: 16rem; padding: 6px 10px; font-size: 12px; }
+.nt-status { margin-left: auto; font-size: 12px; color: var(--b-jade); font-weight: 600; }
+.nt-status.is-wait { color: var(--b-tang); }
+.nt-back { display: none; }
+/* Telefono: una colonna alla volta (workbook → note → nota) */
+@media (max-width: 48rem) {
+  .nt-board { grid-template-columns: minmax(0, 1fr); min-height: 0; }
+  .nt-col { border-right: 0; max-height: none; }
+  .nt-board > * { display: none; }
+  .nt-board[data-view="wb"] > .nt-tree, .nt-board[data-view="list"] > .nt-mid, .nt-board[data-view="note"] > .nt-editor { display: grid; }
+  .nt-back { display: inline-block; }
+  .nt-q { width: 100%; }
+  textarea.nt-body { min-height: 50vh; }
+}
