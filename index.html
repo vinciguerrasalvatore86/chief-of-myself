@@ -91,7 +91,7 @@
     <div class="cm-card-head">
       <div>
         <h2 class="cm-h2" style="--acc:var(--b-sea)"><span class="dot"></span>Agenda</h2>
-        <p class="cm-sub">Riunioni del giorno dai due calendari. L'importanza viene dalle regole in Notion: aggiungi una parola chiave del titolo e scegli Alta, Normale, Bassa o Nascondi.</p>
+        <p class="cm-sub">Riunioni del giorno dai due calendari e task in scadenza (in giallo). L'importanza viene dalle regole in Notion: aggiungi una parola chiave del titolo e scegli Alta, Normale, Bassa o Nascondi.</p>
       </div>
       <div class="cm-controls">
         <button class="cm-btn" id="day-prev" type="button" aria-label="Giorno precedente">‹</button>
@@ -361,6 +361,21 @@
     <div class="f-actions">
       <button class="btn" type="submit">Sposta</button>
       <button class="btn ghost" id="mv-cancel" type="button">Annulla</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="task" id="event-card">
+  <form method="dialog" onsubmit="return false">
+    <h2 id="ev-title">Meeting</h2>
+    <p class="ev-when" id="ev-when"></p>
+    <p class="cm-sub" id="ev-meta"></p>
+    <p class="cm-sub" id="ev-hint"></p>
+    <div class="form-msg err" id="ev-msg" hidden></div>
+    <a class="btn ghost" id="ev-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Apri la task in Notion</a>
+    <div class="f-actions">
+      <button class="btn" id="ev-open" type="button">Apri task</button>
+      <button class="btn ghost" id="ev-close" type="button">Chiudi</button>
     </div>
   </form>
 </dialog>
